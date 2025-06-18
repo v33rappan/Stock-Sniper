@@ -1,0 +1,8 @@
+# Ignore the cache dir
+cache/
+
+# Ignore the env folder
+sniper-env/
+
+# Ignore all csv files
+*.csv
