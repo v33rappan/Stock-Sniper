@@ -1,12 +1,11 @@
 import pandas as pd
 import yfinance as yf
 from datetime import datetime, timedelta
-import requests
-import io
 import os
-from bs4 import BeautifulSoup
 import json
 import warnings
+from ta.momentum import RSIIndicator
+from ta.trend import MACD
 
 # ---------------- CONFIG ------------------
 CONFIG = {
@@ -14,12 +13,14 @@ CONFIG = {
         'SME_CSV': 'sme_watchlist.csv',
         'CACHE_DIR': 'cache',
         'PRICE_CHANGE_LOOKBACK_DAYS': 3,
-        'PRICE_THRESHOLD_PERCENT': 12,
+        'PRICE_THRESHOLD_PERCENT': 1,
         'VOLUME_LOOKBACK_DAYS': 30,
-        'VOLUME_SPIKE_MULTIPLIER': 2.0,
+        'VOLUME_SPIKE_MULTIPLIER': 1.5,
         'CACHE_EXPIRY_MINUTES': 120,
+        'DEBUG_MODE': True
 }
 
+# Suppress warnings from yfinance or pandas
 warnings.filterwarnings("ignore")
 os.makedirs(CONFIG['CACHE_DIR'], exist_ok=True)
 
@@ -58,7 +59,7 @@ def check_smallcap_250_csv():
 def update_sme_watchlist_csv():
     try:
         # Simple example list of popular SME tickers - you can replace this
-        sme_symbols = ["VISHNU.NS", "JFL.NS", "AGARWALFT.NS"]
+        sme_symbols = []
         df = pd.DataFrame({'symbol': sme_symbols})
         df.to_csv(CONFIG['SME_CSV'], index=False)
         print("✅ SME watchlist updated.")
@@ -67,102 +68,122 @@ def update_sme_watchlist_csv():
 
 # ------------- PRICE/VOLUME CHECK ---------
 def fetch_bulk_data(symbols):
-    try:
-        data = yf.download(tickers=symbols, period="40d", group_by="ticker", progress=True)
-        return data
-    except Exception as e:
-        print(f"Error fetching bulk data: {e}")
-        return {}
-
-def fetch_price_volume_data(symbol, data):
-    cache_file = os.path.join(CONFIG['CACHE_DIR'], f"{symbol}.json")
+    cache_file = os.path.join(CONFIG['CACHE_DIR'], 'bulk_data.json')
     if os.path.exists(cache_file):
         mod_time = datetime.fromtimestamp(os.path.getmtime(cache_file))
         if datetime.now() - mod_time < timedelta(minutes=CONFIG['CACHE_EXPIRY_MINUTES']):
-            with open(cache_file, 'r') as f:
-                return json.load(f)
-
+            try:
+                cached_data = pd.read_json(cache_file, typ='series', convert_dates=True)
+                return { ticker: pd.DataFrame(data) for ticker, data in cached_data.items() }
+            except Exception as e:
+                print(f"Failed to read cached bulk data: {e}")
     try:
-        symbol_data = data[symbol] if isinstance(data, dict) else data
-        if symbol_data.empty or len(symbol_data) < CONFIG['PRICE_CHANGE_LOOKBACK_DAYS']:
-            print(f"No price data for {symbol} (possibly delisted or invalid)")
-            return None
+        data = yf.download(symbols, period="40d", group_by="ticker", progress=True)
+        if not isinstance(data, pd.DataFrame) or data.empty:
+            print(f"Error: No data returned from yfinance")
+            return {}
 
-        recent = symbol_data.tail(CONFIG['PRICE_CHANGE_LOOKBACK_DAYS'])
-        old_data = symbol_data.iloc[:-CONFIG['PRICE_CHANGE_LOOKBACK_DAYS']]
+        data_dict = {}
+        if isinstance(data.columns, pd.MultiIndex):
+            for symbol in symbols:
+                if symbol in data.columns.get_level_values(0):
+                    data_dict[symbol] = data[symbol].copy()
+        else:
+            for symbol in symbols:
+                data_dict[symbol] = data.copy()
+        
+        # Save to cache
+        try:
+            save_data = { k: v.to_dict() for k, v in data_dict.items() }
+            pd.Series(save_data).to_json(cache_file)
+        except Exception as e:
+            print(f"Failed to cache bulk data: {e}")
 
-        if old_data.empty or 'Volume' not in old_data.columns:
-            print(f"Not enough volume data for {symbol}")
-            return None
-
-        old_avg_vol_series = old_data['Volume'].tail(CONFIG['VOLUME_LOOKBACK_DAYS'])
-        if old_avg_vol_series.empty:
-            print(f"No historical volume for {symbol}")
-            return None
-
-        old_avg_vol = old_avg_vol_series.mean()
-        if pd.isna(old_avg_vol) or old_avg_vol == 0:
-            print(f"Invalid old volume for {symbol}")
-            return None
-
-        if recent['Close'].empty or len(recent['Close']) < 2:
-            print(f"Not enough closing price data for {symbol}")
-            return None
-
-        price_change = (recent['Close'].iloc[-1] - recent['Close'].iloc[0]) / recent['Close'].iloc[0]
-        volume_spike = recent['Volume'].mean() / old_avg_vol
-
-        result = {
-                'symbol': symbol,
-                'price_change': round(price_change * 100, 2),
-                'volume_spike': round(volume_spike, 2),
-                'latest_close': round(recent['Close'].iloc[-1], 2)
-        }
-
-        with open(cache_file, 'w') as f:
-            json.dump(result, f)
-        return result
+        return data_dict
     except Exception as e:
-        print(f"Error fetching data for {symbol}: {e}")
-        return None
+        print(f"Error fetching bulk data: {e}")
+        return {}
 
 # ---------- FILTER AND ALERT -------------
 def detect_opportunities(symbols, category):
     results = []
     data = fetch_bulk_data(symbols)
-    for sym in symbols:
-        symbol_data = data[sym] if sym in data else data
-        result = fetch_price_volume_data(sym, symbol_data)
-        if result:
-            if result['price_change'] < 0:
-                print(f"{sym} rejected due to negative price change: {data['price_change']}%")
-                continue
-            if result['price_change'] >= CONFIG['PRICE_THRESHOLD_PERCENT'] and result['volume_spike'] >= CONFIG['VOLUME_SPIKE_MULTIPLIER']:
-                result['category'] = category
-                results.append(data)
+    now_str = datetime.now().strftime('%Y%m%d_%H%M%S')
+    csv_filename = f"detected_signals_{category}_{now_str}.csv"
+    rows = []
+
+    for symbol in symbols:
+        if symbol not in data:
+            continue
+        df = data[symbol]
+        if df.empty or len(df) < CONFIG['PRICE_CHANGE_LOOKBACK_DAYS']:
+            continue
+
+        df = df.dropna()
+        recent = df.tail(CONFIG['PRICE_CHANGE_LOOKBACK_DAYS'])
+        old_data = df.iloc[:-CONFIG['PRICE_CHANGE_LOOKBACK_DAYS']]
+        if old_data.empty:
+            continue
+
+        old_avg_vol = old_data['Volume'].tail(CONFIG['VOLUME_LOOKBACK_DAYS']).mean()
+        if old_avg_vol == 0 or pd.isna(old_avg_vol):
+            continue
+
+        price_change = (recent['Close'].iloc[-1] - recent['Close'].iloc[0]) / recent['Close'].iloc[0] * 100
+        volume_spike = recent['Volume'].mean() / old_avg_vol
+
+        # Technical indicator
+        try:
+            rsi = RSIIndicator(close=df['Close']).rsi().iloc[-1]
+            macd = MACD(close=df['Close'])
+            macd_cross = macd.macd_diff().iloc[-1] > 0
+        except:
+            rsi = None
+            macd_cross = None
+
+        if CONFIG['DEBUG_MODE']:
+            print(f"{symbol}: {price_change:.2f}% | Vol: {volume_spike:.2f}x | RSI: {rsi} | MACD Cross: {macd_cross}")
+
+        if price_change < 0:
+            continue
+
+        if price_change >= CONFIG['PRICE_THRESHOLD_PERCENT'] and volume_spike >= CONFIG['VOLUME_SPIKE_MULTIPLIER']:
+            result = {
+                    'symbol': symbol,
+                    'category': category,
+                    'latest_close': round(df['Close'].iloc[-1], 2),
+                    'price_change': round(price_change, 2),
+                    'volume_spike': round(volume_spike, 2),
+                    'RSI': round(rsi, 2) if rsi else None,
+                    'MACD_cross': macd_cross,
+                    'timestamp': datetime.now().isoformat()
+            }
+            results.append(result)
+            rows.append(result)
+
+    if rows:
+        pd.DataFrame(rows).to_csv(csv_filename, index=False)
+        print(f"Saved {len(rows)} signals to {csv_filename}")
+
     return results
 
 # ------------ MAIN ---------------------
 def main():
 
-    print("Updating CSVs.....")
     check_smallcap_250_csv()
     update_sme_watchlist_csv()
 
-    print("Detecting opportunities...")
     smallcaps, smes = load_stock_lists()
     all_opportunities =  []
     all_opportunities += detect_opportunities(smallcaps, 'Smallcap')
     all_opportunities += detect_opportunities(smes, 'SME/Microcap')
-
-    print(f"Total opportunities: {len(all_opportunities)}")
-
+    
     if all_opportunities:
         print("\n Detected Trade Opportunities: \n")
         for op in all_opportunities:
             print(f"\U0001F4C8 {op['symbol']} | {op['category']} | Price: Rs{op['latest_close']} | +{op['price_change']}% | Vol: {op['volume_spike']}x")
-        else:
-            print("No trade-worthy opportunity found today")
+    else:
+        print("No trade-worthy opportunity found today")
 
 if __name__ == "__main__":
     main()
