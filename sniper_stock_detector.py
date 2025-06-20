@@ -251,14 +251,14 @@ def detect_opportunities(symbols, category, strategy):
                         'score': score
                     }])
                     win_prob = model.predict_proba(x_row)[0][1]
-                    row['predicted_win_prob'] = round(win_prob, 4)
+                    result['predicted_win_prob'] = round(win_prob, 4)
                     if CONFIG['ENABLE_ML_FILTERING'] and win_prob < CONFIG['MIN_WIN_PROBABILITY']:
                         continue # Skip low confidence trades
                 except Exception as e:
                     print(f"Prediction failed for {symbol}: {e}")
-                    row['predicted_win_prob'] = None
+                    result['predicted_win_prob'] = None
             else:
-                row['predicted_win_prob'] = None
+                result['predicted_win_prob'] = None
 
 
             results.append(result)
@@ -304,7 +304,7 @@ def main():
     if all_opportunities:
         print("\n Detected Trade Opportunities: \n")
         for op in all_opportunities:
-            print(f"\U0001F4C8 {op['symbol']} | {op['category']} | Price: Rs{op['latest_close']} | +{op['price_change']}% | Vol: {op['volume_spike']}x | {op['score']} | {op['entry_price']} | {op['exit_price']} | {op['result']} | {op['exit_reason']}")
+            print(f"\U0001F4C8 {op['symbol']} | {op['category']} | Price: Rs{op['latest_close']} | +{op['price_change']}% | Vol: {op['volume_spike']}x | {op['score']} | {op['entry_price']} | {op['exit_price']} | {op['result']} | {op['exit_reason']} | {op['predicted_win_prob']}")
     else:
         print("No trade-worthy opportunity found today")
 
