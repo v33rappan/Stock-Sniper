@@ -5,11 +5,13 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
 import matplotlib.pyplot as plt
 import os
+import joblib
 
 TRADES_FILE = 'Output/trade.csv'
 MODEL_REPORT = 'Output/ml_classification_report.txt'
 CONF_MATRIX_PNG = 'Output/ml_confusion_matrix.png'
 FEATURE_IMPORTANCE_CSV = 'Output/ml_feature_importance.csv'
+MODEL_FILE = 'Output/logistic_model.pkl'
 
 def train_ml_model():
     if not os.path.exists(TRADES_FILE):
@@ -34,6 +36,10 @@ def train_ml_model():
     model = LogisticRegression(max_iter=1000)
     model.fit(X_train, Y_train)
     Y_pred = model.predict(X_test)
+
+    # Save model to disk
+    joblib.dump(model, MODEL_FILE)
+    print(f"Model saved to {MODEL_FILE}")
 
     # Report
     report = classification_report(Y_test, Y_pred, target_names=['LOSS', 'WIN'])
