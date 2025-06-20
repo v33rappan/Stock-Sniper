@@ -6,3 +6,10 @@ sniper-env/
 
 # Ignore all csv files
 *.csv
+
+# Ignore data and output folders
+Output/
+data/
+
+# Ignore __pycache__
+__pycache__
