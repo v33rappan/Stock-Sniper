@@ -7,6 +7,7 @@ import warnings
 from ta.momentum import RSIIndicator
 from ta.trend import MACD
 from strategies import STRATEGIES
+import joblib
 
 # ---------------- CONFIG ------------------
 CONFIG = {
@@ -23,6 +24,9 @@ CONFIG = {
         'STOP_LOSS_PCT': 5,
         'TAKE_PROFIT_PCT': 8,
         'TRADE_LOG_FILE': 'Output/trade.csv',
+        'ENABLE_ML_FILTERING': True,
+        'MIN_WIN_PROBABILITY': 0.6,
+        'MODEL_PATH': 'Output/logistic_model.pkl'
 }
 
 # Suppress warnings from yfinance or pandas
@@ -126,6 +130,15 @@ def detect_opportunities(symbols, category, strategy):
     threshold_volume = strategy_config['VOLUME_SPIKE_MULTIPLIER']
     weights = strategy_config['SCORE_WEIGHTS']
 
+    # Load ML model if enabled
+    model = None
+    if CONFIG['ENABLE_ML_FILTERING'] and os.path.exists(CONFIG['MODEL_PATH']):
+        try:
+            model = joblib.load(CONFIG['MODEL_PATH'])
+        except Exception as e:
+            print(f"Failed to load ML model: {e}")
+            model = None
+
     for symbol in symbols:
         if symbol not in data:
             continue
@@ -226,6 +239,27 @@ def detect_opportunities(symbols, category, strategy):
                     'exit_reason': exit_reason,
                     'result': "WIN" if pnl_percent and pnl_percent > 0 else "LOSS" if pnl_percent and pnl_percent < 0 else "NEUTRAL"
             }
+
+            # Predict WIN probability
+            if model:
+                try:
+                    x_row = pd.DataFrame([{
+                        'price_change': price_change,
+                        'volume_spike': volume_spike,
+                        'RSI': rsi,
+                        'MACD_cross': int(macd_cross),
+                        'score': score
+                    }])
+                    win_prob = model.predict_proba(x_row)[0][1]
+                    row['predicted_win_prob'] = round(win_prob, 4)
+                    if CONFIG['ENABLE_ML_FILTERING'] and win_prob < CONFIG['MIN_WIN_PROBABILITY']:
+                        continue # Skip low confidence trades
+                except Exception as e:
+                    print(f"Prediction failed for {symbol}: {e}")
+                    row['predicted_win_prob'] = None
+            else:
+                row['predicted_win_prob'] = None
+
 
             results.append(result)
             rows.append(result)
