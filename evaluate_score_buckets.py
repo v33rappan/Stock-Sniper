@@ -70,11 +70,14 @@ def evaluate_score_buckets(bucket_size, metrics):
     plt.tight_layout()
     plt.savefig(OUTPUT_PLOT)
     print(f"Plot saved to {OUTPUT_PLOT}")
-   
-if __name__ == '__main__':
+
+def run():
     parser = argparse.ArgumentParser(description="Evaluate score buckets from trades.")
     parser.add_argument('--bucket-size', type=int, default=20, help='Bucket size for score grouping ( default: 20 )')
     parser.add_argument('--metrics', nargs='*', default=DEFAULT_METRICS, help='List of metrics to plot')
 
     args = parser.parse_args()
     evaluate_score_buckets(args.bucket_size, args.metrics)
+
+if __name__ == '__main__':
+    run()

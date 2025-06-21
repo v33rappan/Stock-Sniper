@@ -41,5 +41,8 @@ def evaluate_feature_correlation():
     plt.savefig(OUTPUT_IMG)
     print(f"Heatmap saved to {OUTPUT_IMG}")
 
+def run():
+    evaluate_feature_correlation()
+
 if __name__ == '__main__':
     evaluate_feature_correlation()

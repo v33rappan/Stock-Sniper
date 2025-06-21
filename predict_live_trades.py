@@ -16,7 +16,7 @@ def get_latest_signal_file():
         return None
     return max(files, key=os.path.getmtime)
 
-def predict_live_trades():
+def run():
     latest_file = get_latest_signal_file()
     if not latest_file:
         print("No detected signals CSV found")
@@ -45,4 +45,4 @@ def predict_live_trades():
     print(df[['symbol', 'predicted_win_prob']].head())
 
 if __name__ == '__main__':
-    predict_live_trades()
+    run()

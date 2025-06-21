@@ -46,7 +46,7 @@ def summarize(df, group_col):
     print(df_out.to_string(index=False))
 
 
-def main():
+def run():
     parser = argparse.ArgumentParser()
     parser.add_argument('--group', type=str, default='strategy', help="Column to group by (e.g. strategy, symbol)")
     parser.add_argument('--list-metrics', action='store_true', help="List all columns available for grouping")
@@ -66,5 +66,5 @@ def main():
     summarize(df, args.group)
 
 if __name__ == "__main__":
-    main()
+    run()
 

@@ -7,7 +7,7 @@ OUTPUT_DIR = 'Output'
 TRADES_FILE = 'Output/trade.csv'
 SUMMARY_FILE = os.path.join(OUTPUT_DIR, 'performance_summary.csv')
 EQUITY_PLOT = os.path.join(OUTPUT_DIR, 'equity_curve.png')
-INITIAL_CAPITAL = 100_000
+INITIAL_CAPITAL = 100000
 
 def load_trades(file):
     if not os.path.exists(file):
@@ -16,6 +16,7 @@ def load_trades(file):
     df = pd.read_csv(file)
     df = df.dropna(subset=['return_%'])
     df = df.sort_values(by='timestamp')
+    df['result'] = df['return_%'].apply(lambda x: 'win' if x > 0 else 'loss')
     return df
 
 def complete_summary(df):
@@ -66,7 +67,7 @@ def plot_equity(equity, output=EQUITY_PLOT):
     plt.close()
     print(f"Equity curce saved to {output}")
 
-def main():
+def run():
     df = load_trades(TRADES_FILE)
     if df is None or df.empty:
         return
@@ -84,4 +85,4 @@ def main():
     plot_equity(equity)
 
 if __name__ == '__main__':
-    main()
+    run()
