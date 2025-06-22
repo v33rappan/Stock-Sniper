@@ -77,7 +77,7 @@ def main():
         run_optimisation()
 
     if args.retrain:
-        train_model()
+        evaluate_model()
 
     if args.run:
         run_all(args)

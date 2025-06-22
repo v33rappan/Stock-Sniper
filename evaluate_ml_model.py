@@ -28,7 +28,7 @@ def get_model(model_name):
     else:
         raise ValueError(f"Unsupported or unavailable model: {model_name}")
 
-def evaluate_model(model_name):
+def evaluate_model(model_name='logistic'):
     if not os.path.exists(TRADES_FILE):
         print(f"Missing trade file: {TRADES_FILE}")
         return
