@@ -8,6 +8,7 @@ from ta.momentum import RSIIndicator
 from ta.trend import MACD
 from strategies import STRATEGIES
 import joblib
+from optimisation_utils import apply_optimised_threshold
 
 # ---------------- CONFIG ------------------
 CONFIG = {
@@ -296,6 +297,9 @@ def main():
     smallcaps, smes = load_stock_lists()
     all_opportunities =  []
     
+    # Apply threshold optimisation
+    apply_optimised_threshold(STRATEGIES)
+
     for strategy in STRATEGIES:
         print(f"\n Running strategy: {strategy}\n")
         all_opportunities += detect_opportunities(smallcaps, 'Smallcap', strategy)

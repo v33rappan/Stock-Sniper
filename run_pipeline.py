@@ -9,6 +9,7 @@ from evaluate_performance import run as run_performance
 from evaluate_score_buckets import run as run_score_buckets
 from evaluate_strategies import run as run_strategy_comparison
 from predict_live_trades import run as run_predictor
+from threshold_optimiser import run_optimisation
 
 CONFIG = {
         'TRADE_FILE': 'Output/trade.csv',
@@ -59,6 +60,7 @@ def run_all(args):
 def main():
     parser = argparse.ArgumentParser(description='Stock Detection Pipeline Runner')
     parser.add_argument("--run", action='store_true', help='Run full pipeline')
+    parser.add_argument("--retain-thresholds", action='store_true', help='Retrain strategy thresholds before detection')
     parser.add_argument("--analyse", action='store_true', help='Run evaluation/analysis scripts')
     parser.add_argument("--predict-only", action='store_true', help='Only run live trade predictor')
     parser.add_argument("--retrain", action='store_true', help='Retrain ML model')
@@ -68,6 +70,8 @@ def main():
 
     if args.run:
         run_all(args)
+    elif args.retain_thresholds:
+        run_optimisation()
     elif args.analyse:
         run_analysis()
     elif args.predict_only:
