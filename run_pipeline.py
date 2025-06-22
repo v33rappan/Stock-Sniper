@@ -1,5 +1,6 @@
 import argparse
 import os
+import sys
 import pandas as pd
 from sniper_stock_detector import main as run_detection
 from symbol_utils import check_smallcap_250_csv, update_sme_watchlist_csv
@@ -44,7 +45,7 @@ def run_analysis():
     run_feature_corr()
     run_score_buckets()
     run_performance()
-    run_strategy_comparision()
+    run_strategy_comparison()
 
 def run_all(args):
     update_list()
@@ -60,7 +61,7 @@ def run_all(args):
 def main():
     parser = argparse.ArgumentParser(description='Stock Detection Pipeline Runner')
     parser.add_argument("--run", action='store_true', help='Run full pipeline')
-    parser.add_argument("--retain-thresholds", action='store_true', help='Retrain strategy thresholds before detection')
+    parser.add_argument("--retrain-thresholds", action='store_true', help='Retrain strategy thresholds before detection')
     parser.add_argument("--analyse", action='store_true', help='Run evaluation/analysis scripts')
     parser.add_argument("--predict-only", action='store_true', help='Only run live trade predictor')
     parser.add_argument("--retrain", action='store_true', help='Retrain ML model')
@@ -68,16 +69,24 @@ def main():
 
     args = parser.parse_args()
 
+    if not any([args.run, args.retrain_thresholds, args.analyse, args.predict_only, args.retrain]):
+        parser.print_help()
+        sys.exit(0)
+
+    if args.retrain_thresholds:
+        run_optimisation()
+
+    if args.retrain:
+        train_model()
+
     if args.run:
         run_all(args)
-    elif args.retain_thresholds:
-        run_optimisation()
-    elif args.analyse:
+
+    if args.analyse:
         run_analysis()
-    elif args.predict_only:
+
+    if args.predict_only:
         run_predictor()
-    else:
-        parser.print_help()
 
 if __name__ == '__main__':
     main()

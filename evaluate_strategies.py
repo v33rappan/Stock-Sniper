@@ -46,12 +46,7 @@ def summarize(df, group_col):
     print(df_out.to_string(index=False))
 
 
-def run():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--group', type=str, default='strategy', help="Column to group by (e.g. strategy, symbol)")
-    parser.add_argument('--list-metrics', action='store_true', help="List all columns available for grouping")
-    args = parser.parse_args()
-
+def run(group='strategy', list_metrics=True):
     if not os.path.exists(TRADES_FILE):
         print(f"❌ Trade file not found: {TRADES_FILE}")
         return
@@ -59,12 +54,15 @@ def run():
     df = pd.read_csv(TRADES_FILE)
     df = df.dropna(subset=['return_%'])
 
-    if args.list_metrics:
+    if list_metrics:
         list_available_columns(df)
         return
 
-    summarize(df, args.group)
+    summarize(df, group)
 
 if __name__ == "__main__":
-    run()
-
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--group', type=str, default='strategy', help="Column to group by (e.g. strategy, symbol)")
+    parser.add_argument('--list-metrics', action='store_true', help="List all columns available for grouping")
+    args = parser.parse_args()
+    run(args.group, args.list_metrics)
